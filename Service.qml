@@ -202,8 +202,15 @@ Item {
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // Only the fairy itself takes clicks.
-    mask: Region { item: hit }
+    // Only the fairy itself takes clicks. The region is given in window
+    // coordinates: Region.item reads an item's x/y relative to its parent,
+    // which put the click area in the screen corner for the nested hit box.
+    mask: Region {
+      x: Math.round(sprite.x + hit.x)
+      y: Math.round(sprite.y + hit.y)
+      width: Math.round(hit.width)
+      height: Math.round(hit.height)
+    }
 
     onWidthChanged: if (fairy.x === 0 && fairy.y === 0) root.home()
     onHeightChanged: if (fairy.x === 0 && fairy.y === 0) root.home()
