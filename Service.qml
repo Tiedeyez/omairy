@@ -6,19 +6,20 @@ import qs.Commons
 import qs.Commons as Commons
 import "Sprite.js" as Sprite
 
-// OmAiry: a small fairy of light that hangs out on the desktop.
+// OmAiry: a small winged Omarchy mark that lives on the desktop.
 //
 // It lives on one full-screen, transparent layer-shell surface on the
-// focused monitor. The surface takes no input except a small region around
-// the fairy, so it never gets in the way of clicks. Behaviour is a tiny
-// state machine run from a timer:
-//   wander - drift to a random spot
+// focused monitor. The surface takes no input except the square of the
+// body, so it never gets in the way of clicks. Behaviour is a tiny state
+// machine:
+//   wander - drift to a spot nearby
 //   visit  - hover around the window you are working in
-//   perch  - sit on top of that window for a while, wings slow
-//   dart   - zip away quickly after being clicked
-// It sits on the Top layer, so fullscreen windows cover it, and it stops
-// animating when the workspace has a fullscreen window or when animations
-// are turned off (omarchy toggle animations).
+//   perch  - sit on top of that window for a while, wings folded
+//   dart   - zip away after being clicked and sharing a tip
+// Flights are flown by a small smooth model (see `flight`), not along fixed
+// curves. It sits on the Top layer, so fullscreen windows cover it, and it
+// stops animating when the workspace has a fullscreen window or when
+// animations are turned off (omarchy toggle animations).
 Item {
   id: root
 
@@ -31,8 +32,72 @@ Item {
   readonly property bool underFullscreen: monitor && monitor.activeWorkspace ? monitor.activeWorkspace.hasFullscreen : false
   readonly property bool animate: shown && !reducedMotion && !underFullscreen
 
-  readonly property var lines: ["say.hey", "say.over", "say.psst", "say.stretch", "say.water",
-                                "say.hi", "say.tickles", "say.busy", "say.look", "say.nap"]
+  // Now and then, for no reason at all, a little mark pops up over its head.
+  // Checked once per decision (every few seconds), so about once every
+  // three or four minutes on average, at random.
+  property string emote: ""
+  readonly property var emotes: ["!", "?", "...", "!?", ":)", ":D", ":o", ";)", ":P", ":3", "^_^", "o_o", ">_<", "<3", "zzz"]
+  readonly property real emoteChance: 0.03
+  function maybeEmote() {
+    if (demoStep >= 0 || bubbleKey !== "" || emote !== "" || Math.random() >= emoteChance) return
+    showEmote(emotes[Math.floor(Math.random() * emotes.length)])
+  }
+  function showEmote(text) {
+    emote = text
+    emoteTimer.restart()
+  }
+  Timer { id: emoteTimer; interval: 2400; onTriggered: root.emote = "" }
+
+  // ---- demo: everything it can do, once through, in about 40 seconds -----
+  // `omarchy-shell tiedeyez.omairy demo`. Each step either flies somewhere
+  // (the next step starts a moment after it lands) or waits a fixed time.
+  property int demoStep: -1        // -1: not running
+  property int demoPause: 600      // ms to wait after the current step's flight lands
+  property bool demoLoop: false    // the next flight turns a loop
+  property bool demoGlide: false   // the next flight glides early
+  function demo() {
+    shown = true
+    if (!animate) return           // nothing to show under fullscreen or with animations off
+    flight.stop(); brain.stop(); visitDelay.stop()
+    bubbleKey = ""; emote = ""
+    demoStep = 0
+    demoRun()
+  }
+  function demoStop() {
+    if (demoStep < 0) return
+    demoStep = -1
+    demoTimer.stop()
+    demoLoop = false; demoGlide = false
+    if (animate && !flight.running) { brain.interval = 1200; brain.restart() }
+  }
+  function demoAfter(ms) { demoTimer.interval = ms; demoTimer.restart() }
+  function demoFly(kind, pauseMs) {
+    demoPause = pauseMs
+    decide(kind)
+    if (!flight.running) demoAfter(300) // could not take off; move on
+  }
+  function demoRun() {
+    switch (demoStep) {
+    case 0: showEmote("!"); demoAfter(1300); break                 // hello
+    case 1: demoLoop = true; demoFly("tour", 600); break           // long flight with a loop
+    case 2: showEmote("?"); demoAfter(1500); break
+    case 3: demoGlide = true; demoFly("tour", 500); break          // long flight with a glide
+    case 4: demoFly("visit", 1200); break                          // hover by the active window
+    case 5: demoFly("perch", 700); break                           // land on top of it
+    case 6: showEmote("zzz"); demoAfter(4200); break               // rest, wings folded
+    case 7: showEmote(":D"); demoAfter(1500); break
+    case 8: demoPause = 900; poke(); break                         // a tip, then it darts away
+    case 9: showEmote("<3"); demoAfter(2400); break
+    default: demoStop()
+    }
+  }
+  Timer { id: demoTimer; onTriggered: { root.demoStep++; root.demoRun() } }
+
+  // What it shows when clicked: a random Omarchy tip (i18n tip.1 .. tip.N).
+  readonly property int tipCount: 126
+  function pickLine() {
+    return "tip." + (1 + Math.floor(Math.random() * tipCount))
+  }
 
   readonly property var targetScreen: {
     var name = monitor ? String(monitor.name) : ""
@@ -87,7 +152,7 @@ Item {
     var tx, ty, speed = 130, hold = rand(1800, 5000)
     if (next === "perch" && rect) {
       tx = rand(rect.x + 20, rect.x + rect.w - fw - 20)
-      ty = rect.y - fh * 0.62
+      ty = rect.y - fh * (Sprite.BODY_Y + Sprite.BODY_N) / Sprite.GRID // the body sits on the edge
       speed = 110
       hold = rand(8000, 16000)
     } else if (next === "visit" && rect) {
@@ -97,6 +162,11 @@ Item {
       else if (side === 1) { tx = rect.x - fw - rand(4, 50); ty = rand(rect.y, rect.y + rect.h * 0.6) }
       else { tx = rect.x + rect.w + rand(4, 50); ty = rand(rect.y, rect.y + rect.h * 0.6) }
       hold = rand(2500, 6000)
+    } else if (next === "tour") {
+      // Across to the other side of the screen: room for a loop or a glide.
+      tx = fairy.x + fw / 2 < W / 2 ? b.x1 - fw - rand(80, 200) : b.x0 + rand(80, 200)
+      ty = rand(b.y0 + (b.y1 - b.y0) * 0.25, b.y0 + (b.y1 - b.y0) * 0.6)
+      speed = 170
     } else if (next === "dart") {
       tx = rand(b.x0, b.x1 - fw)
       ty = rand(b.y0, b.y1 - fh)
@@ -107,11 +177,17 @@ Item {
       // Drift a moderate distance rather than across the whole screen every time.
       tx = fairy.x + rand(-420, 420)
       ty = fairy.y + rand(-260, 260)
+      // Bounce off the edges instead of sliding along them.
+      if (tx < b.x0) tx = 2 * b.x0 - tx
+      else if (tx > b.x1 - fw) tx = 2 * (b.x1 - fw) - tx
+      if (ty < b.y0) ty = 2 * b.y0 - ty
+      else if (ty > b.y1 - fh) ty = 2 * (b.y1 - fh) - ty
     }
 
     tx = clamp(tx, b.x0, b.x1 - fw)
     ty = clamp(ty, b.y0, b.y1 - fh)
     mode = next
+    if (!forced) maybeEmote()
 
     if (!animate) {
       fairy.x = tx
@@ -119,22 +195,21 @@ Item {
       return
     }
 
-    var dist = Math.sqrt((tx - fairy.x) * (tx - fairy.x) + (ty - fairy.y) * (ty - fairy.y))
-    flyX.to = tx
-    flyY.to = ty
-    flight.duration = clamp(dist / speed * 1000, 500, 7000)
-    flight.restart()
-    brain.interval = flight.duration + hold
-    brain.restart()
+    // Fly there; the brain wakes again `hold` ms after it arrives.
+    flight.begin(tx, ty, speed, hold)
   }
 
   function poke() {
     if (!shown) return
-    bubbleKey = lines[Math.floor(Math.random() * lines.length)]
+    emote = ""
+    bubbleKey = pickLine()
+    // Stay put long enough to be read, then dart off.
+    var hold = 2200 + 55 * strings.t(bubbleKey).length
+    bubbleTimer.interval = hold
     bubbleTimer.restart()
     ring.begin()
     flight.stop()
-    brain.interval = 1400
+    brain.interval = hold + 200
     brain.restart()
     mode = "poked"
   }
@@ -151,7 +226,10 @@ Item {
     interval: 2000
     running: root.animate
     repeat: false
-    onTriggered: root.decide(root.mode === "poked" ? "dart" : "")
+    onTriggered: {
+      if (root.mode === "poked") root.decide("dart")
+      else if (root.demoStep < 0) root.decide("")
+    }
   }
 
   Timer {
@@ -164,7 +242,7 @@ Item {
   Connections {
     target: Hyprland
     function onActiveToplevelChanged() {
-      if (root.animate && root.mode !== "perch" && Math.random() < 0.4)
+      if (root.animate && root.demoStep < 0 && root.mode !== "perch" && Math.random() < 0.4)
         visitDelay.restart()
     }
   }
@@ -172,13 +250,13 @@ Item {
 
   onAnimateChanged: {
     if (animate) { brain.interval = 800; brain.restart() }
-    else { flight.stop(); brain.stop() }
+    else { demoStop(); flight.stop(); brain.stop() }
   }
   onTargetScreenChanged: Qt.callLater(home)
 
   // Pixel units that land on whole screen pixels at any monitor scale.
   readonly property real screenScale: monitor && monitor.scale > 0 ? monitor.scale : 1
-  readonly property real px: Math.max(1, Math.round(3 * screenScale)) / screenScale
+  readonly property real px: Math.max(1, Math.round(2 * screenScale)) / screenScale
   readonly property real ui: Math.max(1, Math.round(2 * screenScale)) / screenScale
   function snap(v, unit) { return Math.round(v / unit) * unit }
 
@@ -187,7 +265,7 @@ Item {
   Timer {
     interval: root.mode === "perch" ? 340 : 170
     repeat: true
-    running: root.animate
+    running: root.animate && !flight.running
     onTriggered: root.bobStep = (root.bobStep + 1) % root.bobPath.length
   }
 
@@ -215,11 +293,140 @@ Item {
     onWidthChanged: if (fairy.x === 0 && fairy.y === 0) root.home()
     onHeightChanged: if (fairy.x === 0 && fairy.y === 0) root.home()
 
-    ParallelAnimation {
+    // ---- flight: smooth and floaty ---------------------------------------
+    //
+    // Nothing follows a fixed curve and nothing changes suddenly. Each frame
+    // the fairy eases its velocity toward "forward at cruise speed, plus a
+    // slow swing from side to side", so it travels in long lazy arcs. On top
+    // of that path it floats gently up and down, and once in a while it
+    // turns a little loop in the air for the fun of it. Everything fades out
+    // over the last stretch, so it settles onto its target softly.
+    QtObject {
       id: flight
-      property int duration: 1500
-      NumberAnimation { id: flyX; target: fairy; property: "x"; duration: flight.duration; easing.type: Easing.InOutSine }
-      NumberAnimation { id: flyY; target: fairy; property: "y"; duration: flight.duration; easing.type: Easing.InOutSine }
+      property bool running: false
+      property real tx: 0
+      property real ty: 0
+      property real speed: 130      // cruise speed, px/s
+      property real hold: 2000      // ms to stay after arriving
+      // Position along the path, before the float and loop are added.
+      property real bx: 0
+      property real by: 0
+      property real vx: 0
+      property real vy: 0
+      property real t: 0            // seconds since take-off
+      // Each flight draws its own swing and float, so no two look alike.
+      property real p1: 0           // swing phase
+      property real p2: 0           // float phase
+      property real f1: 0.35        // swing rate, Hz
+      property real a1: 90          // sideways speed of the swing, px/s
+      property real f2: 1.0         // float rate, Hz
+      property real a2: 5           // float height, px
+      // Loop-the-loop: one full turn of radius loopR, eased in and out.
+      property real loopAt: -1      // time the next loop starts (-1: none this flight)
+      property real loopT: -1       // progress 0..1 while looping, else -1
+      property real loopR: 22
+      property real loopDir: 1
+      property real nextGlide: 0
+      property real glideUntil: -1
+      readonly property bool gliding: running && t < glideUntil
+      readonly property bool hurried: running && speed > 300
+
+      function begin(x, y, cruise, holdMs) {
+        tx = x; ty = y; speed = cruise; hold = holdMs
+        bx = fairy.x; by = fairy.y; vx = 0; vy = 0
+        t = 0
+        p1 = root.rand(0, Math.PI * 2); p2 = 0
+        f1 = root.rand(0.25, 0.45)
+        a1 = root.rand(60, 120) * (Math.random() < 0.5 ? -1 : 1)
+        f2 = root.rand(0.8, 1.2); a2 = root.rand(3, 6)
+        loopAt = root.demoLoop ? 0.8 : Math.random() < 0.22 ? root.rand(0.7, 1.6) : -1
+        loopT = -1
+        loopR = root.rand(16, 28); loopDir = Math.random() < 0.5 ? -1 : 1
+        nextGlide = root.demoGlide ? 0.9 : root.rand(1.2, 2.6)
+        root.demoLoop = false; root.demoGlide = false
+        glideUntil = -1
+        brain.stop()
+        running = true
+      }
+
+      function stop() { running = false; vx = 0; vy = 0 }
+
+      function arrive() {
+        fairy.x = tx; fairy.y = ty
+        stop()
+        if (root.demoStep >= 0) { root.demoAfter(root.demoPause); return }
+        brain.interval = hold
+        brain.restart()
+      }
+
+      function smooth(u) { return u * u * (3 - 2 * u) }
+
+      function step(dt) {
+        t += dt
+        var dx = tx - bx, dy = ty - by
+        var dist = Math.sqrt(dx * dx + dy * dy)
+        if ((dist < 1.5 && loopT < 0) || t > 20) { arrive(); return }
+        var ux = dist > 0.01 ? dx / dist : 0, uy = dist > 0.01 ? dy / dist : 0
+        var fast = hurried
+        var tau = Math.PI * 2
+        // 1 far from the target, easing to 0 on the final approach.
+        var fade = smooth(Math.min(1, dist / 160))
+
+        // Long lazy swing across the path.
+        p1 += dt * tau * f1
+        var side = a1 * Math.sin(p1) * fade * (fast ? 0.4 : 1)
+        // Ease off toward the target, never quite stopping short of it.
+        var want = speed * Math.min(1, dist / 150) + 12
+        // Slow right down while turning a loop, so it comes out round.
+        if (loopT >= 0) want *= 0.25 + 0.75 * Math.abs(Math.cos(smooth(loopT) * Math.PI))
+        // A soft push away from the screen edges, so it curves back instead
+        // of pressing flat against them. Off near the target, which may be
+        // at an edge itself.
+        var b = root.bounds(), m = 70
+        var maxX = b.x1 - fairy.width, maxY = b.y1 - fairy.height
+        var ex = (Math.max(0, b.x0 + m - bx) - Math.max(0, bx - (maxX - m))) * 2.5 * fade
+        var ey = (Math.max(0, b.y0 + m - by) - Math.max(0, by - (maxY - m))) * 2.5 * fade
+        // Gliding: wings held up, drifting down a touch.
+        var sink = gliding ? 35 : 0
+
+        // Ease the velocity toward that; firmer near the target so it settles.
+        var k = (fast ? 4 : 1.9) + 4 * (1 - fade)
+        vx += (ux * want - uy * side + ex - vx) * k * dt
+        vy += (uy * want + ux * side + sink + ey - vy) * k * dt
+        bx += vx * dt; by += vy * dt
+
+        // Glide now and then on longer flights.
+        if (t >= nextGlide && dist > 160 && !fast) {
+          glideUntil = t + root.rand(0.35, 0.6)
+          nextGlide = t + root.rand(1.8, 3.6)
+        }
+
+        // Float: a soft rise and fall on top of the path.
+        p2 += dt * tau * f2
+        var ox = 0, oy = a2 * Math.sin(p2) * fade
+
+        // Loop: one eased turn around a small circle.
+        if (loopT < 0 && loopAt >= 0 && t >= loopAt && dist > 200 && !fast) { loopT = 0; loopAt = -1 }
+        if (loopT >= 0) {
+          loopT += dt / 1.3
+          if (loopT >= 1) loopT = -1
+          else {
+            var th = smooth(loopT) * tau
+            // Circle starting and ending at the path, turning to one side.
+            ox += loopR * (-uy * loopDir * (1 - Math.cos(th)) + ux * Math.sin(th))
+            oy += loopR * (ux * loopDir * (1 - Math.cos(th)) + uy * Math.sin(th))
+          }
+        }
+
+        fairy.x = root.clamp(bx + ox, b.x0, maxX)
+        fairy.y = root.clamp(by + oy, b.y0, maxY)
+      }
+    }
+
+    // Stepped once per display frame, only while in the air.
+    FrameAnimation {
+      running: flight.running && root.animate
+      onTriggered: flight.step(Math.min(0.05, frameTime))
     }
 
     // The fairy's true (smooth) position. Everything drawn snaps to the
@@ -227,11 +434,11 @@ Item {
     // handheld game.
     Item {
       id: fairy
-      width: 28 * root.px
-      height: 28 * root.px
+      width: Sprite.GRID * root.px
+      height: Sprite.GRID * root.px
     }
 
-    // ---- sparkle trail: stepped 4-frame twinkles ---------------------------
+    // ---- sparkle trail: square blocks, 4 steps ---------------------------
     Item {
       id: trail
       anchors.fill: parent
@@ -257,8 +464,9 @@ Item {
             var n = sparkles.itemAt(trail.nextSlot)
             trail.nextSlot = (trail.nextSlot + 1) % sparkles.count
             if (n) {
-              n.x = root.snap(sprite.x + sprite.width / 2 + root.rand(-4, 4) * root.px, root.px)
-              n.y = root.snap(sprite.y + sprite.height / 2 + root.rand(-2, 5) * root.px, root.px)
+              // Shed from just under the body, never inside the hollow mark.
+              n.x = root.snap(sprite.x + sprite.width / 2 + root.rand(-7, 7) * root.px, root.px)
+              n.y = root.snap(sprite.y + (Sprite.BODY_Y + Sprite.BODY_N + root.rand(1.5, 5)) * root.px, root.px)
               n.frame = 0
               trail.live = true
             }
@@ -272,23 +480,14 @@ Item {
         Item {
           id: sp
           property int frame: 4
-          readonly property int arm: [2, 1, 1, 0, -1][frame]
-          visible: arm >= 0
+          // Square blocks that shrink as they fade: 3, 2, 2, 1 pixels.
+          readonly property int side: [3, 2, 2, 1, 0][frame]
+          visible: side > 0
           width: 0; height: 0
           Rectangle {
-            x: -(sp.arm + 0.5) * root.px; y: -0.5 * root.px
-            width: (2 * sp.arm + 1) * root.px; height: root.px
-            color: Qt.lighter(Color.accent, 1.6)
-          }
-          Rectangle {
-            x: -0.5 * root.px; y: -(sp.arm + 0.5) * root.px
-            width: root.px; height: (2 * sp.arm + 1) * root.px
-            color: Qt.lighter(Color.accent, 1.6)
-          }
-          Rectangle {
-            x: -0.5 * root.px; y: -0.5 * root.px
-            width: root.px; height: root.px
-            color: sp.frame === 2 ? Qt.lighter(Color.accent, 1.6) : "white"
+            x: -sp.side * root.px / 2; y: x
+            width: sp.side * root.px; height: width
+            color: sp.frame === 0 ? "white" : Qt.lighter(Color.accent, 1.6)
           }
         }
       }
@@ -299,21 +498,25 @@ Item {
       id: sprite
       width: fairy.width
       height: fairy.height
-      x: root.snap(fairy.x, root.px)
-      y: root.snap(fairy.y, root.px) + root.bobPath[root.bobStep] * root.px
+      // Whole sprite pixels at rest; whole screen pixels in the air, so the
+      // flight is smooth and the art stays crisp.
+      readonly property real grid: flight.running ? 1 / root.screenScale : root.px
+      x: root.snap(fairy.x, grid)
+      // In the air the wingbeats do the bobbing; the gentle bob is for hovering.
+      y: root.snap(fairy.y, grid) + (flight.running ? 0 : root.bobPath[root.bobStep] * root.px)
 
-      // Chime: a dotted diamond that steps outwards.
+      // Click pulse: a dotted square that steps outwards.
       Canvas {
         id: ringCanvas
         property int step: -1
-        readonly property int size: 33
+        readonly property int size: 45
         width: size * root.px; height: size * root.px
         x: (sprite.width - width) / 2
         y: (sprite.height - height) / 2
         renderStrategy: Canvas.Cooperative
         onPaint: {
           var ctx = getContext("2d")
-          Sprite.paintRing(ctx, root.px, size, step >= 0 ? [4, 7, 10, 13, 16][step] : 0,
+          Sprite.paintRing(ctx, root.px, size, step >= 0 ? [9, 12, 15, 18, 21][step] : 0,
                            fairyArt.css(Qt.lighter(Color.accent, 1.6)))
         }
         onStepChanged: requestPaint()
@@ -333,15 +536,18 @@ Item {
         id: fairyArt
         anchors.fill: parent
         px: root.px
+        hair: 1 / root.screenScale
         glow: Color.accent
         resting: root.mode === "perch"
         animate: root.animate
+        gliding: flight.gliding
+        hurried: flight.hurried
       }
 
       Item {
         id: hit
         anchors.centerIn: parent
-        width: 14 * root.px; height: 14 * root.px
+        width: Sprite.BODY_N * root.px; height: Sprite.BODY_N * root.px
         MouseArea {
           anchors.fill: parent
           cursorShape: Qt.PointingHandCursor
@@ -350,25 +556,44 @@ Item {
       }
     }
 
-    // ---- text box: RPG dialog, opens in steps, types itself out -------------
-    Item {
+    // ---- emote: a mark over its head, rarely ---------------------------------
+    Text {
+      id: emoteLabel
+      visible: root.emote !== ""
+      text: root.emote
+      textFormat: Text.PlainText
+      font.family: Style.fontFamily
+      font.pixelSize: Style.font.body + 2
+      font.bold: true
+      color: Qt.lighter(Color.accent, 1.3)
+      style: Text.Outline
+      styleColor: Color.background
+      x: Math.round(sprite.x + sprite.width / 2 - width / 2)
+      y: Math.round(sprite.y + 7 * root.px - height)
+    }
+
+    // ---- speech: a card in the style of Omarchy's own popups, typed out ---
+    Rectangle {
       id: box
       readonly property string full: root.bubbleKey !== "" ? strings.t(root.bubbleKey) : ""
-      property int openStep: 0
       property int chars: 0
-      property bool caret: true
-      readonly property bool done: chars >= full.length
+      readonly property int pad: 10
+      readonly property int maxText: 280
+      readonly property real gap: 3 * root.px
+      readonly property real bodyTop: sprite.y + Sprite.BODY_Y * root.px
+      readonly property real bodyBottom: sprite.y + (Sprite.BODY_Y + Sprite.BODY_N) * root.px
+      readonly property var area: root.bounds()
 
-      readonly property int padX: 7
-      readonly property int padY: 5
-      readonly property int wUnits: Math.ceil(metrics.width) + padX * 2 + 4
-      readonly property int hUnits: Math.ceil(metrics.height) + padY * 2 + 2
-
-      visible: root.bubbleKey !== "" && openStep > 0
-      width: wUnits * root.ui
-      height: hUnits * root.ui
-      x: root.snap(root.clamp(sprite.x + sprite.width / 2 - width / 2, 4, win.width - width - 4), root.ui)
-      y: root.snap(Math.max(4, sprite.y + 5 * root.px - height), root.ui)
+      visible: full !== ""
+      color: Color.popups.background
+      border.color: Color.popups.border
+      border.width: Math.max(1, Style.space(2))
+      radius: Style.cornerRadius
+      width: sizer.width + pad * 2
+      height: sizer.height + pad * 2
+      x: Math.round(root.clamp(sprite.x + sprite.width / 2 - width / 2, area.x0, Math.max(area.x0, area.x1 - width)))
+      // Above the body; below it when there is no room above.
+      y: Math.round(bodyTop - gap - height >= area.y0 ? bodyTop - gap - height : bodyBottom + gap)
 
       TextMetrics {
         id: metrics
@@ -376,99 +601,46 @@ Item {
         text: box.full
       }
 
+      // Lays out the whole line so the card has its final size from the
+      // first character and does not grow while typing.
+      Text {
+        id: sizer
+        visible: false
+        textFormat: Text.PlainText
+        font: label.font
+        wrapMode: Text.WordWrap
+        width: Math.ceil(Math.min(box.maxText, metrics.width + 1))
+        text: box.full
+      }
+
+      Text {
+        id: label
+        x: box.pad
+        y: box.pad
+        width: sizer.width
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: Color.popups.text
+        font.family: Style.fontFamily
+        font.pixelSize: Style.font.body
+        text: box.full.substring(0, box.chars)
+      }
+
       onFullChanged: {
-        openStep = 0
+        typer.stop()
         chars = 0
-        if (full !== "") {
-          if (Style.duration(100) === 0) { openStep = 3; chars = full.length }
-          else opener.restart()
-        }
+        if (full === "") return
+        if (root.reducedMotion) chars = full.length
+        else typer.restart()
       }
 
       Timer {
-        id: opener
-        interval: 45
+        id: typer
+        interval: 28
         repeat: true
         onTriggered: {
-          if (box.openStep < 3) box.openStep++
-          else if (box.chars < box.full.length) box.chars++
+          if (box.chars < box.full.length) box.chars++
           else stop()
-        }
-      }
-      Timer {
-        interval: 380
-        repeat: true
-        running: box.visible && box.done
-        onTriggered: box.caret = !box.caret
-      }
-
-      // Box art, revealed top-down-from-the-middle in three steps.
-      Item {
-        anchors.centerIn: parent
-        width: parent.width
-        height: Math.max(root.ui * 6, root.snap(parent.height * box.openStep / 3, root.ui))
-        clip: true
-        Canvas {
-          id: boxCanvas
-          anchors.centerIn: parent
-          width: box.width; height: box.height
-          renderStrategy: Canvas.Cooperative
-          onPaint: Sprite.paintBox(getContext("2d"), root.ui, box.wUnits, box.hUnits, {
-            outline: fairyArt.css(Qt.darker(Color.background, 1.6)),
-            frame: fairyArt.css(Color.foreground),
-            accent: fairyArt.css(Color.accent),
-            fill: fairyArt.css(Color.background)
-          })
-          onWidthChanged: requestPaint()
-          onHeightChanged: requestPaint()
-          Connections {
-            target: Color
-            function onAccentChanged() { boxCanvas.requestPaint() }
-            function onBackgroundChanged() { boxCanvas.requestPaint() }
-          }
-        }
-      }
-
-      // Text drawn at 1 texel per unit and blown up without smoothing, so the
-      // glyphs come out chunky like a handheld font.
-      Item {
-        id: textHost
-        visible: box.openStep >= 3
-        x: box.padX * root.ui
-        y: box.padY * root.ui
-        width: Math.ceil(metrics.width)
-        height: Math.ceil(metrics.height)
-        transformOrigin: Item.TopLeft
-        scale: root.ui
-        layer.enabled: true
-        layer.smooth: false
-        layer.textureSize: Qt.size(width, height)
-
-        Text {
-          id: label
-          textFormat: Text.PlainText
-          color: Color.foreground
-          font.family: Style.fontFamily
-          font.pixelSize: 10
-          font.bold: true
-          renderType: Text.NativeRendering
-          text: box.full.substring(0, box.chars)
-        }
-      }
-
-      // Blinking "more" arrow.
-      Item {
-        visible: box.done && box.caret && box.openStep >= 3
-        x: box.width - 8 * root.ui
-        y: box.height - 6 * root.ui
-        Repeater {
-          model: [[0, 0, 5], [1, 1, 3], [2, 2, 1]]
-          Rectangle {
-            required property var modelData
-            x: modelData[0] * root.ui; y: modelData[1] * root.ui
-            width: modelData[2] * root.ui; height: root.ui
-            color: Color.accent
-          }
         }
       }
     }
@@ -478,6 +650,7 @@ Item {
     target: "tiedeyez.omairy"
     function show(): void { root.shown = true }
     function hide(): void { root.shown = false }
+    function demo(): void { root.demo() }
     function toggle(): void { root.shown = !root.shown }
     function poke(): void { root.poke() }
     function summon(): void {

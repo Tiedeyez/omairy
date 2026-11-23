@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "tiedeyez.omairy",
   "name": "OmAiry",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "author": "Tiedeyez",
   "license": "MIT",
-  "description": "A small fairy of light that lives on your desktop, drawn as a 16-bit handheld style pixel sprite. It flaps on three frames inside a dithered, palette-cycling glow, moves in whole pixels, leaves a trail of twinkling pixel sparkles, visits whichever window you are working in and sometimes perches on top of it to rest. Click it and a ring of light pulses out and it speaks in a retro RPG text box that types itself out. Colours follow your theme's accent. Starts no processes, touches no files and makes no network requests; it hides under fullscreen windows and holds still when animations are turned off.",
+  "description": "A small winged Omarchy mark that lives on your desktop. The Omarchy icon is its body, with block wings that flap and a block-art glow that echoes outward in your theme's accent colour. It flies in long lazy arcs, sometimes turning a loop, visits whichever window you are working in and perches on top of it to rest. Click it and it teaches you something about Omarchy, a keybinding or a command, in a card styled like Omarchy's own popups. Starts no processes, touches no files and makes no network requests; it hides under fullscreen windows and holds still when animations are turned off.",
   "kinds": [
     "service"
   ],

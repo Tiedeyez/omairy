@@ -25,8 +25,8 @@ with `omarchy plugin add` adds an entry to `~/.config/omarchy/shell.json`; the
 | Source | What | When |
 |---|---|---|
 | Hyprland IPC (the shell's existing connection) | focused monitor, its size, scale and reserved edges (bar/dock space); the active window's position and size; whether the workspace is fullscreen | continuously, to decide where to fly |
-| The shell's theme (`qs.Commons` Color/Style) | accent, foreground and background colours; system font; whether animations are on | continuously |
-| Its own `i18n/en.json` | the ten short lines it says when clicked | at start |
+| The shell's theme (`qs.Commons` Color/Style) | accent, background and popup colours; system font and size; corner rounding; whether animations are on | continuously |
+| Its own `i18n/en.json` | the 126 Omarchy tips it shows when clicked | at start |
 
 It does not read window titles, window contents, the clipboard, keystrokes or
 any file outside its own folder.
@@ -43,12 +43,12 @@ analytics, no auto-update.
 ## Input
 
 It shows one transparent full-screen layer surface on the focused monitor. Its
-input region is only the ~40 px square around the fairy; clicks anywhere else
+input region is only the ~30 px square of the fairy's body; clicks anywhere else
 go to the windows underneath. It never takes keyboard focus.
 
 ## IPC it exposes
 
-`omarchy-shell tiedeyez.omairy show|hide|toggle|poke|summon`. These only move,
+`omarchy-shell tiedeyez.omairy show|hide|toggle|poke|summon|demo`. These only move,
 show or hide the fairy.
 
 ## What it does not do
@@ -58,8 +58,9 @@ windows, no changes to your Hyprland or shell configuration.
 
 ## Maintainer and licence
 
-Tiedeyez, MIT licence. Original design: a generic glowing fairy. Not affiliated
-with, and contains no art or text from, any game. Written with Claude Code
+Tiedeyez, MIT licence. The body is the Omarchy icon mark (Omarchy is MIT
+licensed, copyright David Heinemeier Hansson); the rest is original. A
+community plugin, not an official part of Omarchy. Written with Claude Code
 (Anthropic).
 
 ## Check it yourself
