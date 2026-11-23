@@ -108,15 +108,17 @@ function dotter(ctx, px) {
 // sparse, gone (like the glyphs for full block, dark, medium, light shade).
 //
 // It is drawn on a finer grid than the sprite: `sub` cells per sprite pixel,
-// one cell per screen pixel. frame: which step of the outward travel to
+// one cell per screen pixel (the canvas works in logical units and applies
+// the monitor scale itself, so a cell is px / sub units). frame: which step of the outward travel to
 // draw. Each step is painted once and cached; playing them in order makes
 // the light radiate. pal: { glow, glowLight } as CSS colour strings.
 var GLOW_FRAMES = 16
 var ECHO_GAP = 4   // sprite pixels between one frame and the next
 
-function paintGlow(ctx, sub, frame, pal) {
+function paintGlow(ctx, sub, px, frame, pal) {
   var n = GRID * sub
-  ctx.clearRect(0, 0, n, n)
+  var cell = px / sub   // one screen pixel, in the canvas's own units
+  ctx.clearRect(0, 0, GRID * px, GRID * px)
   var inner = BODY_N / 2
   var reach = GRID / 2 - inner
   // Over one loop every frame moves out by two gaps, so the bottom-opening
@@ -147,7 +149,7 @@ function paintGlow(ctx, sub, frame, pal) {
       if (!on) continue
       ctx.globalAlpha = alpha
       ctx.fillStyle = color
-      ctx.fillRect(i, j, 1, 1)
+      ctx.fillRect(i * cell, j * cell, cell, cell)
     }
   }
   ctx.globalAlpha = 1.0

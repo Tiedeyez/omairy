@@ -88,9 +88,8 @@ Item {
         anchors.fill: parent
         visible: fairy.wave === index
         smooth: false
-        canvasSize: Qt.size(Sprite.GRID * fairy.sub, Sprite.GRID * fairy.sub)
         renderStrategy: Canvas.Cooperative
-        onPaint: Sprite.paintGlow(getContext("2d"), fairy.sub, index, fairy.palette)
+        onPaint: Sprite.paintGlow(getContext("2d"), fairy.sub, fairy.px, index, fairy.palette)
         Connections {
           target: fairy
           function onPaletteChanged() { requestPaint() }
