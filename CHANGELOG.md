@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-11-27
+
+- Shorter manifest description, to fit the marketplace's 500-character limit.
+  No change to how OmAiry looks or behaves.
+
 ## 1.0.0 — 2026-11-23
 
 First public release.

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "tiedeyez.omairy",
   "name": "OmAiry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Tiedeyez",
   "license": "MIT",
-  "description": "A small winged Omarchy mark that lives on your desktop. The Omarchy icon is its body, with block wings that flap and a block-art glow that echoes outward in your theme's accent colour. It flies in long lazy arcs, sometimes turning a loop, visits whichever window you are working in and perches on top of it to rest. Click it and it teaches you something about Omarchy, a keybinding or a command, in a card styled like Omarchy's own popups. Starts no processes, touches no files and makes no network requests; it hides under fullscreen windows and holds still when animations are turned off.",
+  "description": "A small winged Omarchy mark that lives on your desktop. The Omarchy icon is its body, with block wings and a block-art glow in your theme's accent colour. It flies in lazy arcs, visits the window you are working in and perches on it to rest. Click it and it teaches you an Omarchy keybinding or command in a card styled like Omarchy's popups. Starts no processes, touches no files, makes no network requests; hides under fullscreen windows and holds still when animations are off.",
   "kinds": [
     "service"
   ],
